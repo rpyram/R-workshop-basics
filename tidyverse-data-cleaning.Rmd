@@ -1,0 +1,210 @@
+---
+title: "R Data Manipulation - The Basics in Tidyverse and Psych"
+author: "Rachael Pyram"
+date: "2023-10-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Some basics: R is a statisical coding language. Some of the functions you'll use will be in "base R", which just means the functions are built into the original coding language's functionality. Other functions are built into something called a package (e.g., Tidyverse), which is like an add-on feature that provides you additional functions to work with.  
+
+My most used packages are tidyverse (which I use for data manipulation), psych and lavaan (which have a lot of common psych analyses), and ggplot (for data viz).  
+
+In this document, I'll show you some of my code to do basic data cleaning. It should go without saying that my way is not the best or even most efficient way, but when I started the program, senior students shared their code and I found it really helpful.   
+
+## Getting started
+  
+To get started, [download R](http://lib.stat.cmu.edu/R/CRAN/). Follow the link for your computer's software (e.g., Windows for PC; macOS for MacBooks). Pick the most recent version of R to download (usually the first download link on the page).  
+  
+Once that's downloaded, you need to download Posit (formally R Studio Desktop), which is a user-friendly desktop integration for R, which makes it easier to code things. [Download here](https://posit.co/download/rstudio-desktop/). Use the download link that is compatible with your computer's software.  
+  
+This is what your basic Posit (R Studio) console looks like (I have mine in dark mode, so yours might be white)
+![r-console](C:/Users/racha/Desktop/r-console.png)  
+
+For a tutorial on the layout of R Studio, see [this webpage](https://docs.posit.co/ide/user/ide/get-started/)  
+
+## Reading in data  
+  
+Your working directory is where on your computer you are working from. To oversimplify, it's the location where the file(s) you're working with are stored. You can use the command *setwd()* and type in the file location you want to use. For instance, if I wanted to use my Desktop, I can right-click my Desktop folder and find the file location  
+![desktop-path](C:/Users/racha/Desktop/desktop-path.png)  
+
+```{r, eval = FALSE}
+#setting my working directory
+setwd("C:/Users/racha/Desktop")
+```
+  
+Now, if I want to import an excel CSV file that is on my Desktop (where I've told R to look), I use the command *read.csv()* with the file name, which in this case is "raw" for the raw dataset. I've named this dataset "import".  
+```{r}
+#importing data
+  ##note: I always use CSV (comma separated value) files because they don't have formatting
+import = read.csv("raw.csv")
+
+```
+  
+Because I'm using data from Qualtrics there's a lot of extra columns with information I don't need.
+```{r}
+#the "head()" function shows the first few rows of a dataset
+  ##I specify that I'm looking at the "import" dataset, only columns 1 through 5, and I'm asking for the first 5 rows
+head(import[1:5], 5)
+```
+  
+As you can see there's info about Start Time, Latitude Location, and a bunch of other stuff I don't care about. To remove that I'll create a new variable without those rows and columns.   
+```{r}
+#removing extraneous qualtrics variables
+  ##note: "-c()" removes the range specified
+  ##In this format variable[x , y], x is the rows of a dataset and y is the columns
+  ## -c(1:3) removes rows 1 through 3 from the import dataset
+  ## -c(1:17) removes columns 1 through 17 from the import dataset
+  ##By letting the "import[-c(1:3), -c(1:17)]" equal "import", we're saving our changes to the dataset
+import = import[-c(1:3), -c(1:17)]
+
+```
+  
+Now, we can see these rows and columns are removed. It's a good practice to look at the *head()* or *tail()* of your dataset when you make changes. *tail()* shows you the bottom, where *head()* shows you the top   
+```{r}
+head(import[1:5], 5)
+
+```
+    
+Now that the data is imported and extraneous info is removed, we can start working with the data.  
+
+## Recoding the Measures  
+Often our scales export with the anchors as they appear in the survey (e.g., "strongly disagree"). To analyze, we need to convert this to a numerical value.  
+
+One cool thing you can do in R is create functions (like the ones you find in packages and base R) to routinize common tasks. Below is an example of a function I wrote that automatically changes a 5-point Likert into numbers.  
+
+Up until now, we haven't used a package. To use a package, you first have to install it. The function uses the package "dplyr", which is part of the Tidyverse
+```{r, eval = FALSE}
+#install new packages using command install.packages()
+install.packages("dplyr") #note: need to put package name in quotations
+```
+  
+Now that the package is installed, we use the *library()* command to call the package. This is especially important to do when using multiple packages, because you might have a function with the same name in two different packages.  
+```{r}
+library(dplyr) #note: don't need to put the package in quotes here
+```
+  
+Here, I create the function, called "recode_5pt". At this stage, I'm just specifying the rules of the function, or what the function is supposed to do.  
+
+There's some new formatting here. The x in function(x) is a placeholder for the variable we will input later, and subsequent x's in the function dictate the behavior of x.  
+
+Another important formatting change is the use of pipes "%in%, %>%, and sometimes just %%", which is a tidyverse thing to denote a sequence of actions for an object (i.e., our x input).  
+
+I'm using the dplyr command *case_when()*, which allows us to apply multiple if/else logic statements; if/else statements are conditional commands that behave based on a set logical rule (e.g., if x = 1, then multiply by 3)  
+
+```{r}
+#recode function to replace text anchors with numbers
+  ## this case_when() is saying if x (which is values from our input) has a value (e.g., "Strongly agree"), then change it to the number 1, and so on
+recode_5pt =  function(x) {
+  case_when(x %in% c("Strongly disagree") ~ 1,
+            x %in% c("Somewhat disagree") ~ 2,
+            x %in% c("Neither agree nor disagree") ~ 3,
+            x %in% c("Somewhat agree") ~ 4,
+            x %in% c("Strongly agree") ~ 5)
+}
+```
+  
+Now that we've created the function, it is time to apply it to our dataset. To do so, we'll use the dplyr command *mutate_at()* which allows us to apply a transformation (in this case, our recope_5pt function) to multiple variables  
+```{r}
+#applying function to dataset
+  ##note: here c(3:40, 45:47) denotes the columns where this function should be applied, so columns 3-40 and 45-47
+  ##these columns are where the scales with a 5-point Likert are
+import = import %>% mutate_at(c(3:40, 45:47), recode_5pt)
+
+```
+  
+To check if the function worked appropriately, we can check the range of values in one of the columns where we used the function.  
+```{r}
+#checking range for column 3
+  ## na.rm = TRUE removes any NAs from inclusion
+range(import[c(3)], na.rm = TRUE)
+
+```
+  
+We have a min = 1 and a max = 5, which is good! Our function worked. Best practice would be to add funky values into the function (e.g., "Strongly disagree" ~ 999) just to test how things are working (but I've used this function 100 times; I know it works).  
+
+## Descriptive Stats  
+Getting basic descriptives can be done in base R, but I tend to use the psych package. First, you'll need to install it.
+```{r, eval = FALSE}
+install.packages("psych")
+```
+  
+Let's look at the descriptives for two of my scales: a 6-item allyship measure adapated from Gates et al. (2021). We'll start by isolating the scale items into their own dataframe.  
+```{r}
+#pulling allyship items from the import dataset
+ally = import[c(35:40)]
+
+#checking I pulled the right variables
+head(ally, 2)
+
+```
+  
+Now that we've isolated the allyship items, let's get some basic info on the items. The *describe()* command gives us basic summary statistics (e.g., n, mean, sd). 
+```{r}
+#call the psych package
+library(psych)
+
+#generating summary statistics
+describe(ally)
+
+```
+  
+Now, if we want to look at the correlation between the items, we would use the *corr.test()* command.  
+```{r}
+#generating item correlations
+corr.test(ally)
+
+```
+  
+To find which correlations are significant, we can add *$p* to see the p-values for the correlations, or *$stars* to see the p-values presented as the stars we typically see in publications.  
+```{r}
+#examining significant correlations
+corr.test(ally)$p
+
+corr.test(ally)$stars
+```
+    
+Finally, if we wanted to evaluate the reliability of the scale, we would use the *alpha()* command.
+```{r}
+#computing reliability
+  ##na.rm = TRUE removes missing values
+  ##check.keys = TRUE gives a warning if reverse-scored items haven't been recoded appropriately
+alpha(ally, na.rm = TRUE, check.keys = TRUE)
+
+```
+  
+Another thing we typically do for analysis is compute a scale score, which is either the sum or mean of the items for each participant, and represents their overall standing on the construct. To do this, I use the *rowMeans()* function and *mutate()* function to compute the average score and save it back to the dataframe.  
+
+*rowMeans()* takes the mean for a row, which means it uses the values in every column of a given dataset to compute a mean value for the row. So, *rowMeans()* uses the values in columns "Allyship1" through "Allyship6" to compute the mean for each row. *colMeans()* would use every row in a column to compute the mean.  
+
+We use *mutate()* because we want to amend the original dataset
+```{r}
+#computing scale score
+  ##saving to original dataframe import, which is why import = import
+  ##inside mutate(), I've created the variable (column) name "Avg_ally", which is equivalent to the row mean of all the allyship items
+import = import %>% mutate(Avg_Ally = rowMeans(ally, na.rm = TRUE))
+
+#checking if things worked by evaluating the range of values and viewing the dataset
+  ##note: the $ allows you to view one column from a dataframe (i.e., import$Avg_Ally gives the Avg_Ally column from the import dataframe)
+range(import$Avg_Ally, na.rm = TRUE)
+head(import$Avg_Ally)
+
+```
+  
+Now that we've done some basic cleaning and descriptives, we want to save the changes we made to our "import" dataset and return this dataset back into a CSV file, so we can use it for inferential statistical analyses.  
+
+## Exporting
+```{r, eval = FALSE}
+#exporting clean data
+  ##note: import is the dataframe we've worked on
+  ##the file = " " specifies where we are saving, and titles the CSV file (in this case it is entitled "clean")
+write.csv(import, file = "C:/Users/racha/Desktop/clean.csv")
+
+```
+
+### My biggest pro tip  
+One of the best tricks to understand a function (regardless of if it is base R or in a package) is to type ? before the function name in your console. So, for instance, if I wanted to know what the *head()* function does, I would type ***?head()*** into the console and a help window would appear and give me a description of the function, what arguments it takes, and examples of its usage.
+![help](C:/Users/racha/Desktop/help.png)
